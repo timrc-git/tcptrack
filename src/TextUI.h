@@ -52,6 +52,7 @@ public:
 	void displayer_run();
 private:
 	void drawui(); // draw the screen.
+        void dumpdata();
 	void print_bps(int); // display the speed with the right format
 
 	bool run_displayer;
@@ -75,6 +76,8 @@ private:
 	pthread_mutex_t state_mutex;
 
 	bool paused;
+        bool dodump;
+        unsigned long lastdump;
 
 	int sort_type;
 

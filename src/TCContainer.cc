@@ -61,7 +61,8 @@ TCContainer::TCContainer()
 		throw GenericError("pthread_create() failed.");
 
 	state=TSTATE_RUNNING;
-	purgeflag=true;
+	//purgeflag=true;
+	purgeflag=false;
 }
 
 // remove closed connections?

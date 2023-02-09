@@ -43,6 +43,8 @@ TextUI::TextUI( TCContainer *c )
 
 	paused=false;
 	sort_type=SORT_UN;
+        dodump = false;
+        lastdump = (unsigned long)time(NULL);
 
 	pthread_mutex_init( &state_mutex, NULL );
 }
@@ -151,6 +153,10 @@ void TextUI::displayer_run()
 			{
 				app->shutdown();
 			}
+			else if( c=='d' )
+			{
+				dodump=true;
+			}
 			else if( c=='s' )
 			{
 				switch( sort_type )
@@ -175,13 +181,13 @@ void TextUI::displayer_run()
 				{
 					// going from paused to unpaused
 					paused=false;
-					container->purge(true);
+					//container->purge(true);
 				}
 				else
 				{
 					// going from unpaused to paused
 					paused=true;
-					container->purge(false);
+					//container->purge(false);
 				}
 			}
 		}
@@ -223,6 +229,43 @@ void TextUI::displayer_run()
 
 	}
 	endwin();
+}
+
+void TextUI::dumpdata() {
+  unsigned long now = (unsigned long) time(NULL);
+  if ((now - lastdump) < 30 && !dodump) {
+    return;
+  }
+  dodump=false;
+  lastdump = now;
+  // NOTE: this should be called after drawui() has calculated Bps_total
+  SortedIterator * i=iter;
+  i->rewind();
+  fprintf(stderr, "############################################################\n");
+  fprintf(stderr, "time: %lu\n", now);
+  while( TCPConnection *ic=i->getNext() ) {
+    fprintf(stderr, "%s:%d ", ic->srcAddr().ptr(), ic->srcPort() );
+    fprintf(stderr, "%s:%d ", ic->dstAddr().ptr(), ic->dstPort());
+    switch (ic->getState()) {
+      case TCP_STATE_SYN_SYNACK : fprintf(stderr, "SYN_SENT    "); break;
+      case TCP_STATE_SYNACK_ACK : fprintf(stderr, "SYN|ACK-ACK "); break;
+      case TCP_STATE_UP         : fprintf(stderr, "ESTABLISHED "); break;
+      case TCP_STATE_FIN_FINACK : fprintf(stderr, "CLOSING     "); break;
+      case TCP_STATE_CLOSED     : fprintf(stderr, "CLOSED      "); break;
+      case TCP_STATE_RESET      : fprintf(stderr, "RESET       "); break;
+    }
+
+    if( ic->getIdleSeconds() < 60 ) { fprintf(stderr, "%ds ",(int)ic->getIdleSeconds()); }
+    else if( ic->getIdleSeconds() < 3600 ) { fprintf(stderr, "%dm ",(int)ic->getIdleSeconds()/60); }
+    else { fprintf(stderr, "%dh ",(int)ic->getIdleSeconds()/3600); }
+
+    if( ic->activityToggle() ) { fprintf(stderr, "* "); }
+    else { fprintf(stderr, "  "); }
+    //unsigned int Bps = ic->getPayloadBytesPerSecond();
+    //print_bps(Bps);
+    unsigned int bytes = ic->getPayloadByteCount();
+    fprintf(stderr, "total: %d \n", bytes);
+  }
 }
 
 void TextUI::drawui()
@@ -312,11 +355,11 @@ void TextUI::drawui()
 
 		move(row,58);
 		if( ic->getIdleSeconds() < 60 )
-			printw("%ds",ic->getIdleSeconds());
+			printw("%ds",(int)ic->getIdleSeconds());
 		else if( ic->getIdleSeconds() < 3600 ) 
-			printw("%dm",ic->getIdleSeconds()/60);
+			printw("%dm",(int)ic->getIdleSeconds()/60);
 		else
-			printw("%dh",ic->getIdleSeconds()/3600);
+			printw("%dh",(int)ic->getIdleSeconds()/3600);
 
 		move(row,63);
 		if( ic->activityToggle() )
@@ -327,6 +370,10 @@ void TextUI::drawui()
 		move(row,65);
 		unsigned int Bps = ic->getPayloadBytesPerSecond();
 		print_bps(Bps);
+
+		move(row,75);
+		unsigned int bytes = ic->getPayloadByteCount();
+		printw("%s:%d", "tot: ", bytes);
 
 		if( ic->srcAddr().GetType() == 6 )
 			row++;
@@ -400,6 +447,7 @@ void TextUI::drawui()
 	}
 
 	attroff(A_REVERSE);
+        dumpdata();
 	refresh();
 }
 
